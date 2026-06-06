@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# 下载和输出（本地数据，不提交）
+downloads/
+output/
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
