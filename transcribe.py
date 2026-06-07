@@ -11,9 +11,39 @@
 
 import argparse
 import os
+import shutil
+import site
 import sys
 import time
 from pathlib import Path
+
+
+def _ensure_cuda_dlls() -> None:
+    """Windows: copy CUDA 12 runtime DLLs from nvidia-* wheels to ctranslate2 dir."""
+    if sys.platform != "win32":
+        return
+    needed = [
+        "cublas64_12.dll",
+        "cublasLt64_12.dll",
+    ]
+    for sp in site.getsitepackages():
+        nvidia_root = os.path.join(sp, "nvidia")
+        if not os.path.isdir(nvidia_root):
+            continue
+        for pkg in os.listdir(nvidia_root):
+            bin_dir = os.path.join(nvidia_root, pkg, "bin")
+            if not os.path.isdir(bin_dir):
+                continue
+            for dll in needed:
+                src = os.path.join(bin_dir, dll)
+                if not os.path.exists(src):
+                    continue
+                dst = os.path.join(sp, "ctranslate2", dll)
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+
+
+_ensure_cuda_dlls()
 
 from faster_whisper import WhisperModel
 from deep_translator import GoogleTranslator

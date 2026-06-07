@@ -5,7 +5,7 @@ __pycache__/
 
 # 下载和输出（本地数据，不提交）
 downloads/
-output/
+# output/
 
 # IDE
 .vscode/

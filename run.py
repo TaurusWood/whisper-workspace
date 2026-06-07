@@ -20,11 +20,44 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import site
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+
+
+def _ensure_cuda_dlls() -> None:
+    """Windows: copy CUDA 12 runtime DLLs from nvidia-* wheels to ctranslate2 dir."""
+    if sys.platform != "win32":
+        return
+    # ctranslate2 needs these DLLs next to its own .pyd/.dll to find them on load
+    needed = [
+        "cublas64_12.dll",
+        "cublasLt64_12.dll",
+    ]
+    for sp in site.getsitepackages():
+        nvidia_root = os.path.join(sp, "nvidia")
+        if not os.path.isdir(nvidia_root):
+            continue
+        for pkg in os.listdir(nvidia_root):
+            bin_dir = os.path.join(nvidia_root, pkg, "bin")
+            if not os.path.isdir(bin_dir):
+                continue
+            for dll in needed:
+                src = os.path.join(bin_dir, dll)
+                if not os.path.exists(src):
+                    continue
+                dst = os.path.join(sp, "ctranslate2", dll)
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+
+
+_ensure_cuda_dlls()
+
 from faster_whisper import WhisperModel
 
 
@@ -174,8 +207,8 @@ def main() -> None:
         help="计算设备 (默认: auto — 自动选 GPU > CPU)"
     )
     parser.add_argument(
-        "--compute-type", default="auto",
-        help="精度 (默认: auto)。GPU 建议 float16，CPU 建议 int8"
+        "--compute-type", default="float16",
+        help="精度 (默认: float16)。CPU 建议 int8"
     )
     parser.add_argument(
         "--skip-download", action="store_true",
@@ -264,11 +297,14 @@ def main() -> None:
 
         # 2. 转录
         print("  🎙️  转录中...")
+        t_start = time.perf_counter()
         try:
             transcript, language = transcribe_audio(model, audio_path)
         except Exception as e:
             print(f"  ❌ 转录失败: {e}")
             continue
+        elapsed = time.perf_counter() - t_start
+        print(f"  ⏱️  转录耗时: {elapsed:.1f}s")
 
         # 3. 保存输出
         os.makedirs(str(OUTPUT_DIR), exist_ok=True)
@@ -276,13 +312,13 @@ def main() -> None:
 
         # 纯文本版
         txt_path = OUTPUT_DIR / f"{safe_title}_转录.txt"
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(f"{title}\n")
-            f.write(f"频道: {channel}\n")
-            f.write(f"检测语言: {language}\n")
-            f.write(f"{'=' * 50}\n\n")
-            f.write(transcript)
-        print(f"  📄 TXT → {txt_path.name}")
+        # with open(txt_path, "w", encoding="utf-8") as f:
+        #     f.write(f"{title}\n")
+        #     f.write(f"频道: {channel}\n")
+        #     f.write(f"检测语言: {language}\n")
+        #     f.write(f"{'=' * 50}\n\n")
+        #     f.write(transcript)
+        # print(f"  📄 TXT → {txt_path.name}")
 
         # Markdown 版（含 description）
         md_path = OUTPUT_DIR / f"{safe_title}.md"
